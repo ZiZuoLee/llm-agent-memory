@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from typing import Dict, List
@@ -104,14 +105,28 @@ def run_experiment(mode: str, user_queries: List[str]) -> None:
         assistant_text = llm.generate(messages)
         _log_turn(index, query, assistant_text)
 
-        context_memory.add_turn(query, assistant_text)
-        retrieval_memory.add_memory(f"User: {query}\nAssistant: {assistant_text}")
-        profile_memory.update_from_text(query)
+        # Memory isolation: update only the components relevant to the active mode.
+        if mode == "context":
+            context_memory.add_turn(query, assistant_text)
+        elif mode == "retrieval":
+            retrieval_memory.add_memory(f"User: {query}\nAssistant: {assistant_text}")
+        elif mode == "hierarchical":
+            context_memory.add_turn(query, assistant_text)
+            retrieval_memory.add_memory(f"User: {query}\nAssistant: {assistant_text}")
+            profile_memory.update_from_text(query)
 
 
 def main() -> None:
     """Entry point for running a demo experiment."""
-    mode = "hierarchical"
+    parser = argparse.ArgumentParser(description="Run LLM memory experiments.")
+    parser.add_argument(
+        "--mode",
+        choices=["no_memory", "context", "retrieval", "hierarchical"],
+        default="hierarchical",
+        help="Memory mode to use for the experiment.",
+    )
+    args = parser.parse_args()
+    mode = args.mode
     user_queries = [
         "Hi, I like concise answers.",
         "Remind me what I said about answer style.",
