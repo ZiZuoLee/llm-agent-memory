@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from typing import Dict, List
@@ -76,7 +77,7 @@ def _build_messages_hierarchical(
     )
 
 
-def run_experiment(mode: str, user_queries: List[str]) -> None:
+def run_experiment(mode: str, user_queries: List[str]) -> List[str]:
     """Run a multi-turn simulation for a given memory mode."""
     llm = LLMClient()
     builder = PromptBuilder()
@@ -90,6 +91,7 @@ def run_experiment(mode: str, user_queries: List[str]) -> None:
         retrieval_k=3,
     )
 
+    assistant_responses: List[str] = []
     for index, query in enumerate(user_queries, start=1):
         if mode == "no_memory":
             messages = _build_messages_no_memory(query)
@@ -104,6 +106,7 @@ def run_experiment(mode: str, user_queries: List[str]) -> None:
 
         assistant_text = llm.generate(messages)
         _log_turn(index, query, assistant_text)
+        assistant_responses.append(assistant_text)
 
         # Memory isolation: update only the components relevant to the active mode.
         if mode == "context":
@@ -114,6 +117,54 @@ def run_experiment(mode: str, user_queries: List[str]) -> None:
             context_memory.add_turn(query, assistant_text)
             retrieval_memory.add_memory(f"User: {query}\nAssistant: {assistant_text}")
             profile_memory.update_from_text(query)
+    return assistant_responses
+
+
+def _scenario_short_preference() -> List[str]:
+    """Create a short preference scenario."""
+    return [
+        "Hi, I like concise answers.",
+        "Remind me what I said about answer style.",
+        "Give me a short summary of our chat.",
+    ]
+
+
+def _scenario_long_preference() -> List[str]:
+    """Create a long preference scenario with filler turns."""
+    filler_turns = [
+        "Explain what a neural network is.",
+        "Give me a fun fact about space.",
+        "What is the capital of France?",
+        "How do I boil an egg?",
+        "Tell me a joke.",
+        "Suggest a movie.",
+        "Define machine learning.",
+        "How do I stay productive?",
+    ]
+    return (
+        ["I like concise answers."]
+        + filler_turns
+        + [
+            "Remind me what I said about answer style.",
+            "Give me a short summary of our chat.",
+        ]
+    )
+
+
+def _evaluate(preference_reply: str, summary_reply: str) -> Dict[str, bool]:
+    """Evaluate preference recall and summary mention heuristics."""
+    preference_recall_correct = _mentions_concise(preference_reply)
+    summary_mentions_preference = _mentions_concise(summary_reply)
+    return {
+        "preference_recall_correct": preference_recall_correct,
+        "summary_mentions_preference": summary_mentions_preference,
+    }
+
+
+def _mentions_concise(text: str) -> bool:
+    """Check if text mentions concise preference."""
+    lowered = text.lower()
+    return "concise" in lowered or "short" in lowered
 
 
 def main() -> None:
@@ -125,15 +176,51 @@ def main() -> None:
         default="hierarchical",
         help="Memory mode to use for the experiment.",
     )
+    parser.add_argument(
+        "--scenario",
+        choices=["short_preference", "long_preference"],
+        default="short_preference",
+        help="Scenario to run for evaluation.",
+    )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=5,
+        help="Number of repeats for evaluation.",
+    )
     args = parser.parse_args()
     mode = args.mode
-    user_queries = [
-        "Hi, I like concise answers.",
-        "Remind me what I said about answer style.",
-        "Give me a short summary of our chat.",
-    ]
-    print(f"Running experiment in mode: {mode}")
-    run_experiment(mode, user_queries)
+    if args.scenario == "long_preference":
+        user_queries = _scenario_long_preference()
+    else:
+        user_queries = _scenario_short_preference()
+
+    results: List[Dict[str, bool]] = []
+    for repeat_index in range(args.repeat):
+        print(f"Running experiment {repeat_index + 1}/{args.repeat} in mode: {mode}")
+        assistant_responses = run_experiment(mode, user_queries)
+        # Evaluate last two turns only; assume fixed scenario ordering.
+        preference_reply = assistant_responses[-2] if len(assistant_responses) >= 2 else ""
+        summary_reply = assistant_responses[-1] if len(assistant_responses) >= 1 else ""
+        results.append(_evaluate(preference_reply, summary_reply))
+
+    accuracy = {
+        "preference_recall_correct": sum(
+            1 for item in results if item["preference_recall_correct"]
+        )
+        / max(1, len(results)),
+        "summary_mentions_preference": sum(
+            1 for item in results if item["summary_mentions_preference"]
+        )
+        / max(1, len(results)),
+    }
+    summary = {
+        "mode": mode,
+        "scenario": args.scenario,
+        "repeat": args.repeat,
+        "accuracy": accuracy,
+    }
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
