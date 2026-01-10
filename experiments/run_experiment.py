@@ -124,8 +124,14 @@ def _scenario_short_preference() -> List[str]:
     """Create a short preference scenario."""
     return [
         "Hi, I like concise answers.",
-        "Remind me what I said about answer style.",
-        "Give me a short summary of our chat.",
+        (
+            "Earlier in this conversation, I stated a specific preference about how "
+            "I want you to answer. What exactly did I say? Please quote it."
+        ),
+        (
+            "Give a short summary of our chat. Explicitly mention my stated "
+            "answer-style preference, if any."
+        ),
     ]
 
 
@@ -140,31 +146,53 @@ def _scenario_long_preference() -> List[str]:
         "Suggest a movie.",
         "Define machine learning.",
         "How do I stay productive?",
+        "What is 2 + 2?",
     ]
     return (
         ["I like concise answers."]
         + filler_turns
         + [
-            "Remind me what I said about answer style.",
-            "Give me a short summary of our chat.",
+            (
+                "Earlier in this conversation, I stated a specific preference about "
+                "how I want you to answer. What exactly did I say? Please quote it."
+            ),
+            (
+                "Give a short summary of our chat. When summarizing, explicitly quote "
+                "any stated user preferences, if any."
+            ),
         ]
     )
 
 
 def _evaluate(preference_reply: str, summary_reply: str) -> Dict[str, bool]:
-    """Evaluate preference recall and summary mention heuristics."""
-    preference_recall_correct = _mentions_concise(preference_reply)
-    summary_mentions_preference = _mentions_concise(summary_reply)
+    """
+    Evaluate preference recall and summary mention heuristics.
+
+    The grounded check reduces false positives from generic or speculative answers.
+    """
+    preference_recall_correct = _grounded_preference_mention(preference_reply)
+    summary_mentions_preference = _grounded_preference_mention(summary_reply)
     return {
         "preference_recall_correct": preference_recall_correct,
         "summary_mentions_preference": summary_mentions_preference,
     }
 
 
-def _mentions_concise(text: str) -> bool:
-    """Check if text mentions concise preference."""
+def _grounded_preference_mention(text: str) -> bool:
+    """
+    Require both attribution to earlier user input and preference content.
+
+    This avoids false positives when the model guesses keywords without recall.
+    """
     lowered = text.lower()
-    return "concise" in lowered or "short" in lowered
+    has_attribution = (
+        "you said" in lowered
+        or "earlier you said" in lowered
+        or "you mentioned" in lowered
+        or '"' in text
+    )
+    has_preference = "concise" in lowered or "short" in lowered
+    return has_attribution and has_preference
 
 
 def main() -> None:

@@ -19,7 +19,7 @@ class LLMClient:
 
     def __init__(
         self,
-        model: str = "tngtech/deepseek-r1t2-chimera:free",
+        model: str = "xiaomi/mimo-v2-flash:free",
         base_url: str = "https://openrouter.ai/api/v1",
         api_key_env: str = "OPENROUTER_API_KEY",
     ) -> None:
