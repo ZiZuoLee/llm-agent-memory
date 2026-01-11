@@ -250,6 +250,20 @@ def main() -> None:
     }
     print(json.dumps(summary, indent=2))
 
+    # ---- save results to json file ----
+    output_dir = os.path.join(PROJECT_ROOT, "results")
+    os.makedirs(output_dir, exist_ok=True)
+
+    output_path = os.path.join(
+        output_dir,
+        f"{mode}_{args.scenario}_repeat{args.repeat}.json",
+    )
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    print(f"\nResults saved to: {output_path}")
+
 
 if __name__ == "__main__":
     main()
