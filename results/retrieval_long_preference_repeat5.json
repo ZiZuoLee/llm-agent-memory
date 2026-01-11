@@ -1,0 +1,9 @@
+{
+  "mode": "retrieval",
+  "scenario": "long_preference",
+  "repeat": 5,
+  "accuracy": {
+    "preference_recall_correct": 1.0,
+    "summary_mentions_preference": 0.8
+  }
+}

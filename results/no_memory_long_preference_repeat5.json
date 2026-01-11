@@ -1,0 +1,9 @@
+{
+  "mode": "no_memory",
+  "scenario": "long_preference",
+  "repeat": 5,
+  "accuracy": {
+    "preference_recall_correct": 0.0,
+    "summary_mentions_preference": 0.4
+  }
+}
